@@ -9,7 +9,7 @@ test: clean all
 
 all: socks_server.cpp console.cpp htmlGen.cpp
 	$(CXX) socks_server.cpp -o socks_server $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
-	$(CXX) console.cpp htmlGen.cpp -o console.cgi $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
+	$(CXX) console.cpp htmlGen.cpp -o hw4.cgi $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
 clean:
 	rm -f socks_server
 	rm -f console.cgi

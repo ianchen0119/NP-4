@@ -57,6 +57,7 @@ private:
 
 class htmlGen{
   public:
+    std::string SOCKS_IP, SOCKS_PORT;
     /* parse QUERY_STRING into userData */
     void do_parseString();
     std::string getQueryString();

@@ -11,20 +11,29 @@ std::string htmlGen::getQueryString(){
 
 void htmlGen::do_parseString(){
     std::string envVal = this->getQueryString() + "&";
-    std::string userData;
+    std::string reqBlock;
     int start, end, index;
     start = 0;
     index = 0;
     while((end = envVal.find('&', start)) != -1){
-        userData = envVal.substr(start, end - start);
-        if(userData.length() == 3)
-            break;
-        if(index % 3 == 0){
-            userTable[index / 3].url = userData.substr(3);
-        }else if (index % 3 == 1){
-            userTable[index / 3].port = userData.substr(3);
+        reqBlock = envVal.substr(start, end - start);
+        if(reqBlock.length() == 3){
+            index++;
+            continue;
+        }
+
+        if(index == 15){
+            this->SOCKS_IP = reqBlock.substr(3);
+        }else if(index == 16){
+            this->SOCKS_PORT = reqBlock.substr(3);
         }else{
-            userTable[index / 3].file = userData.substr(3);
+            if(index % 3 == 0){
+            userTable[index / 3].url = reqBlock.substr(3);
+            }else if (index % 3 == 1){
+                userTable[index / 3].port = reqBlock.substr(3);
+            }else{
+                userTable[index / 3].file = reqBlock.substr(3);
+            }
         }
         index++;
         start = end + 1;
