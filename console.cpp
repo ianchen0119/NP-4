@@ -3,16 +3,30 @@
 
 using boost::asio::ip::tcp;
 
+void controller::setRequest(int id_, data_t* req){
+    user_t userData = htmlGen::getInstance().userTable[id_];
+    req[0] = 0x04;
+    req[1] = 0x01;
+    req[2] = std::stoi(userData.port)/256;
+    req[3] = std::stoi(userData.port)%256;
+    req[4] = 0x00;
+    req[5] = 0x00;
+    req[6] = 0x00;
+    req[7] = 0x01;
+    req[8] = 0x00;
+    for (int i = 0; i < (int)userData.url.length(); i++){
+        req[9 + i] = (unsigned char)htmlGen::getInstance().SOCKS_IP[i];
+    }
+    req[9 + userData.url.length()] = 0x00;
+}
 
 void controller::start(){
     this->do_resolve();
 }
 
 void controller::do_resolve(){
-    user_t userData;
-    userData = htmlGen::getInstance().userTable[std::stoi(id)];
     auto self(shared_from_this());
-    resolver.async_resolve(userData.url, userData.port,
+    resolver.async_resolve(htmlGen::getInstance().SOCKS_IP, htmlGen::getInstance().SOCKS_PORT,
         [this, self](const boost::system::error_code &ec,
             const boost::asio::ip::tcp::resolver::results_type results){
             if(!ec){
@@ -31,17 +45,46 @@ void controller::do_connect(){
             boost::asio::async_connect(socket_, endpoints,
                 [this, self](const boost::system::error_code &ec, tcp::endpoint ed){
                 if(!ec){
-                    clearBuffer(data_);
-                    user_t* userTable = htmlGen::getInstance().userTable;
-                    /* open test file as ifstream */
-                    std::string path = "./test_case/" + userTable[std::stoi(id)].file;
-                    fin.open(path.data());
-                    do_read();
+                    setRequest(std::stoi(id), sock_buf);
+
                 }else{
                     socket_.close();
                 }
             });
 }
+
+void controller::sendRequest(){
+    auto self(shared_from_this());
+    boost::asio::async_write(socket_, boost::asio::buffer(sock_buf, sizeof(data_t)*(10 + htmlGen::getInstance().SOCKS_IP.length())),
+        [this, self](boost::system::error_code ec, std::size_t /*length*/){
+        if(!ec){
+            read_reply();
+        }else{
+            socket_.close();
+        }
+    });
+}
+
+void controller::read_reply(){
+    auto self(shared_from_this());
+    clearBuffer(sock_buf);
+    socket_.async_read_some(boost::asio::buffer(sock_buf, max_length),
+                [this, self](boost::system::error_code ec, std::size_t length){
+                    if (!ec){
+                        user_t userData = htmlGen::getInstance().userTable[std::stoi(id)];
+                        if (sock_buf[0] == 0x00 && sock_buf[1] == 0x5a){
+                            std::string path = "./test_case/" + userData.file;
+                            fin.open(path.data());
+                            do_read();
+                        } else {
+                            socket_.close();
+                        }
+                    } else {
+                        socket_.close();
+                    }
+                }
+            );
+        }
 
 void controller::do_write(std::string command){
     auto self(shared_from_this());

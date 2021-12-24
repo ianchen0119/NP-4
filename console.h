@@ -15,7 +15,7 @@
 #include <sys/wait.h>
 
 #define USER_NUM 5
-
+#define data_t unsigned char
 #define clearBuffer(data) bzero(data, sizeof(data))
 #define data2Msg(sou, des, size) \
 sou[size] = '\0'; \
@@ -43,6 +43,9 @@ private:
     void do_write(std::string command);
     void do_resolve();
     void do_connect();
+    void read_reply();
+    void setRequest(int id, data_t* req);
+    void sendRequest();
 
     tcp::resolver resolver;
     tcp::socket socket_;
@@ -52,7 +55,7 @@ private:
     boost::asio::ip::tcp::resolver::results_type endpoints;
     enum { max_length = 4096 };
     char data_[max_length];
-  
+    data_t sock_buf[max_length];
 };
 
 class htmlGen{
