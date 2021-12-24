@@ -3,6 +3,7 @@
 using boost::asio::ip::tcp;
 
 void connection::start(){
+    fw_config_setter();
     if(req.CD == 0x01){
         /* connect */
         do_resolve();
@@ -19,7 +20,6 @@ void connection::start(){
         }
         set_req(true);
         do_reply(false);
-        fw_config_setter();
         do_accept();
     }
 }
@@ -68,14 +68,14 @@ void connection::do_accept(){
                 do_reply(true);
             } else {
                 client_sock.close();
-                }
             }
-        );
+        }
+    );
 }
 
 void connection::do_write_up(std::size_t length){
     auto self(shared_from_this());
-    boost::asio::async_write(client_sock, boost::asio::buffer(uplink, length),
+    boost::asio::async_write(server_sock, boost::asio::buffer(uplink, length),
         [this, self](boost::system::error_code ec, std::size_t /*length*/){
             if (!ec){
                 do_read_up();
@@ -134,7 +134,7 @@ void connection::do_read_dl(){
 void connection::fw_config_setter(){
     std::string line;
     std::ifstream config;
-    config.open("socks.conf");
+    config.open("./socks.conf");
     while(getline(config, line)){
         fw_config_t new_rule;
         /* mode setting */
@@ -164,13 +164,17 @@ void connection::fw_config_setter(){
 }
 
 bool connection::fw_config_getter(data_t CD, std::string URL){
+    bool result = false;
     for(fw_config_t item: this->config_vector){
         if(CD == item.mode){
             std::regex new_rule(item.rule);
-            if(regex_match(URL, new_rule)) return true;
+            if(std::regex_match(URL, new_rule)){
+                result = true;
+                break;
+            } 
         }
     }
-    return false;
+    return result;
 }
 
 void connection::set_req(bool isAccept){
@@ -267,7 +271,6 @@ void session::request_parser(data_t* data, sock4_t &req){
         i++;
     }
     req.IDLEN = i;
-
     if(req.DSTIP == "0.0.0.1"){
         req.DOMAIN_NAME = data + 9 + req.IDLEN;
         i = 0;
