@@ -3,7 +3,6 @@
 using boost::asio::ip::tcp;
 
 void connection::start(){
-    fw_config_setter();
     if(req.CD == 0x01){
         /* connect */
         do_resolve();
@@ -164,6 +163,8 @@ void connection::fw_config_setter(){
 }
 
 bool connection::fw_config_getter(data_t CD, std::string URL){
+    this->config_vector.clear();
+    fw_config_setter();
     bool result = false;
     for(fw_config_t item: this->config_vector){
         if(CD == item.mode){

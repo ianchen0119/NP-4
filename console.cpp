@@ -30,7 +30,6 @@ void controller::do_resolve(){
         [this, self](const boost::system::error_code &ec,
             const boost::asio::ip::tcp::resolver::results_type results){
             if(!ec){
-                clearBuffer(data_);
                 endpoints = results;
                 do_connect();
             }else{
@@ -46,7 +45,7 @@ void controller::do_connect(){
                 [this, self](const boost::system::error_code &ec, tcp::endpoint ed){
                 if(!ec){
                     setRequest(std::stoi(id), sock_buf);
-
+                    sendRequest();
                 }else{
                     socket_.close();
                 }
