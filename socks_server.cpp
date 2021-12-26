@@ -17,8 +17,8 @@ void connection::start(){
                 this->port++;
             }
         }
-        set_req(true);
-        do_reply(false);
+        set_res(true);
+        send_res(false);
         do_accept();
     }
 }
@@ -43,15 +43,13 @@ void connection::do_connect(){
     auto self(shared_from_this());
         boost::asio::async_connect(server_sock, endpoint,
             [this, self](const boost::system::error_code &ec, tcp::endpoint ed){
-                if (!ec){
+                if(!ec){
                     req.URL = server_sock.remote_endpoint().address().to_string();
-                    set_req(true);
-                    do_reply(true);
-                } else {
-                    set_req(false);
-                    do_reply(false);
-                    server_sock.close();
-                    client_sock.close();
+                    set_res(true);
+                    send_res(true);
+                }else{
+                    set_res(false);
+                    send_res(false);
                 }
             }
         );
@@ -64,7 +62,7 @@ void connection::do_accept(){
             if (!ec){
                 server_sock = std::move(socket);
                 (this->acceptor).close();
-                do_reply(true);
+                send_res(true);
             } else {
                 client_sock.close();
             }
@@ -76,9 +74,9 @@ void connection::do_write_up(std::size_t length){
     auto self(shared_from_this());
     boost::asio::async_write(server_sock, boost::asio::buffer(uplink, length),
         [this, self](boost::system::error_code ec, std::size_t /*length*/){
-            if (!ec){
+            if(!ec){
                 do_read_up();
-            } else {
+            }else{
                 client_sock.close();
                 server_sock.close();
             }
@@ -90,9 +88,9 @@ void connection::do_write_dl(std::size_t length){
     auto self(shared_from_this());
     boost::asio::async_write(client_sock, boost::asio::buffer(downlink, length),
         [this, self](boost::system::error_code ec, std::size_t /*length*/){
-            if (!ec){
+            if(!ec){
                 do_read_dl();
-            } else {
+            }else{
                 client_sock.close();
                 server_sock.close();
             }
@@ -102,12 +100,12 @@ void connection::do_write_dl(std::size_t length){
 
 void connection::do_read_up(){
     auto self(shared_from_this());
-    buffer_clear(uplink);
+    // buffer_clear(uplink);
     client_sock.async_read_some(boost::asio::buffer(uplink, max_length),
         [this, self](boost::system::error_code ec, std::size_t length){
-            if (!ec){
+            if(!ec){
                 do_write_up(length);
-            } else {
+            }else{
                 client_sock.close();
                 server_sock.close();
             }
@@ -117,12 +115,12 @@ void connection::do_read_up(){
 
 void connection::do_read_dl(){
     auto self(shared_from_this());
-    buffer_clear(downlink);
+    // buffer_clear(downlink);
     server_sock.async_read_some(boost::asio::buffer(downlink, max_length),
         [this, self](boost::system::error_code ec, std::size_t length){
-            if (!ec){
+            if(!ec){
                 do_write_dl(length);
-            } else {
+            }else{
                 client_sock.close();
                 server_sock.close();
             }
@@ -160,6 +158,7 @@ void connection::fw_config_setter(){
         }
         this->config_vector.push_back(new_rule);
     }
+    config.close();
 }
 
 bool connection::fw_config_getter(data_t CD, std::string URL){
@@ -178,13 +177,7 @@ bool connection::fw_config_getter(data_t CD, std::string URL){
     return result;
 }
 
-void connection::set_req(bool isAccept){
-
-    std::cout << "<S_IP>: " << client_sock.local_endpoint().address().to_string() << std::endl;
-    std::cout << "<S_PORT>: " << std::to_string(htons(client_sock.local_endpoint().port())) << std::endl;
-    std::cout << "<D_IP>: " << req.URL << std::endl;
-    std::cout << "<D_PORT>: " << req.DSTPORT << std::endl;
-
+void connection::set_res(bool isAccept){
     buffer_clear(downlink);
     /* downlink buffer init */
     for(int i = 0; i < 8; i++){
@@ -197,6 +190,11 @@ void connection::set_req(bool isAccept){
     }
     downlink[2] = port/256;
     downlink[3] = port%256;
+
+    std::cout << "<S_IP>: " << client_sock.local_endpoint().address().to_string() << std::endl;
+    std::cout << "<S_PORT>: " << std::to_string(htons(client_sock.local_endpoint().port())) << std::endl;
+    std::cout << "<D_IP>: " << req.URL << std::endl;
+    std::cout << "<D_PORT>: " << req.DSTPORT << std::endl;
 
     if(req.CD == 0x01){
         std::cout << "<Command>: CONNECT" << std::endl;
@@ -211,15 +209,15 @@ void connection::set_req(bool isAccept){
     std::cout << "-------------------------------------" << std::endl;
 }
 
-void connection::do_reply(bool cond){
+void connection::send_res(bool cond){
     auto self(shared_from_this());
-    boost::asio::async_write(client_sock, boost::asio::buffer(downlink, sizeof(data_t) * 8),
+    client_sock.async_write_some(boost::asio::buffer(downlink, sizeof(data_t) * 8),
         [this, self, cond](boost::system::error_code ec, std::size_t /*length*/){
             if(!ec){
                 if((this->downlink)[1] == 0x5a){
                     if(cond){
-                        do_read_up();
                         do_read_dl();
+                        do_read_up();
                     }
                 }else{
                     client_sock.close();
@@ -246,7 +244,6 @@ void session::do_read(){
             sock4_t requestedContent;
             request_parser(data_, requestedContent);
             std::make_shared<connection>(io_context, std::move(socket_), requestedContent)->start();
-            io_context.run();
         }else{
             socket_.close();
         }
@@ -290,15 +287,15 @@ void server::do_accept(){
     [this](boost::system::error_code ec){
         if(!ec){
             /* if no error occur, server trans the ownership of socket to session */
-            // ref: https://www.boost.org/doc/libs/1_47_0/doc/html/boost_asio/reference/io_context/notify_fork.html
-            io_context.notify_fork(boost::asio::io_context::fork_prepare);
+            // ref: https://www.boost.org/doc/libs/1_66_0/doc/html/boost_asio/reference/io_context/notify_fork.html
+            io_context.notify_fork(boost::asio::execution_context::fork_prepare);
             if(fork() == 0){
                 /* Child Process */
-                io_context.notify_fork(boost::asio::io_context::fork_child);
+                io_context.notify_fork(boost::asio::execution_context::fork_child);
                 acceptor_.close();
                 std::make_shared<session>(std::move(socket))->start();
             }else{
-                io_context.notify_fork(boost::asio::io_context::fork_parent);
+                io_context.notify_fork(boost::asio::execution_context::fork_parent);
                 socket.close();
                 do_accept();
             }

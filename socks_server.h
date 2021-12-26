@@ -58,12 +58,12 @@ private:
   void do_resolve();
   void do_connect();
   void do_accept();
-  void set_req(bool isAccept);
+  void set_res(bool isAccept);
   void do_write_up(std::size_t length);
   void do_read_up();
   void do_write_dl(std::size_t length);
   void do_read_dl();
-  void do_reply(bool cond);
+  void send_res(bool cond);
 
   tcp::socket client_sock, server_sock;
   sock4_t req;
